@@ -8,10 +8,10 @@ DEPS := $(OBJS:.o=.d)
 INC_DIRS := $(shell find $(SRC_DIRS) -type d)
 INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 
-CPPFLAGS ?= $(INC_FLAGS) -MMD -MP -ldl -lpaho-mqtt3c
+CPPFLAGS ?= $(INC_FLAGS) -MMD -MP
 
 $(TARGET): $(OBJS)
-	$(CC) $(LDFLAGS) $(OBJS) -o $@ $(LOADLIBES) $(LDLIBS)
+	$(CC) $(LDFLAGS) $(OBJS) -o -ldl -lpaho-mqtt3c $@ $(LOADLIBES) $(LDLIBS)
 
 .PHONY: clean
 clean:
