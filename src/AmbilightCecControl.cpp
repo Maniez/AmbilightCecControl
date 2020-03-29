@@ -25,9 +25,21 @@
 #include <libcec/cec.h>
 #include <libcec/cecloader.h>
 #include <libcec/cectypes.h>
+
+#include "MQTTClient.h"
+
 using namespace std;
 
 using namespace CEC;
+
+char ADDRESS[] = "tcp://192.168.1.26:1883";
+char CLIENTID[] = "Ambilight RPI";
+char TOPIC[] = "rpi/ambilight/control";
+#define QOS         1
+#define TIMEOUT     10000L
+
+volatile MQTTClient_deliveryToken deliveredtoken;
+volatile bool mqttEnableHyperion;
 
 ICECCallbacks g_callbacks;
 libcec_configuration g_config;
@@ -38,9 +50,7 @@ bool g_bSingleCommand(false);
 std::string g_strPort;
 
 void CecLogMessage(void *cbParam, const cec_log_message *message) {
-	if (cbParam) {
-		printf("\n");
-	}
+	(void) cbParam;
 	if ((message->level & g_cecLogLevel) == message->level) {
 		std::string strLevel;
 		switch (message->level) {
@@ -62,14 +72,67 @@ void CecLogMessage(void *cbParam, const cec_log_message *message) {
 		default:
 			break;
 		}
-
 		printf("%s[%16lld]\t%s\n", strLevel.c_str(), message->time, message->message);
-
 	}
+}
+
+void CecCommand(void *cbParam, const cec_command *command) {
+	(void) cbParam;
+	(void) command;
+	std::cout << "Command received" << std::endl;
+}
+
+void delivered(void *context, MQTTClient_deliveryToken dt) {
+	(void) context;
+	printf("Message with token value %d delivery confirmed\n", dt);
+	deliveredtoken = dt;
+}
+
+int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message) {
+	(void) context;
+	(void) topicLen;
+
+	std::cout << "Message arrived" << std::endl;
+	std::cout << "     topic: " << topicName << std::endl;
+	std::cout << "   message: " << (char*) message->payload << std::endl;
+
+	if (strcmp("true", (char*) message->payload) == 0) {
+		mqttEnableHyperion = true;
+	} else if (strcmp("false", (char*) message->payload) == 0) {
+		mqttEnableHyperion = false;
+	}
+
+	MQTTClient_freeMessage(&message);
+	MQTTClient_free(topicName);
+	return 1;
+}
+
+void connlost(void *context, char *cause) {
+	(void) context;
+	printf("\nConnection lost\n");
+	printf("     cause: %s\n", cause);
 }
 
 int main() {
 
+	/**********************************Init MQTT Client**********************************/
+
+	MQTTClient client;
+	MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
+	int rc;
+
+	MQTTClient_create(&client, ADDRESS, CLIENTID, MQTTCLIENT_PERSISTENCE_NONE, NULL);
+	conn_opts.keepAliveInterval = 20;
+	conn_opts.cleansession = 1;
+
+	MQTTClient_setCallbacks(client, NULL, connlost, msgarrvd, delivered);
+
+	if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS) {
+		std::cout << "Failed to connect, return code " << rc << std::endl;
+		exit(EXIT_FAILURE);
+	}
+
+	/**********************************Init CEC Client***********************************/
 	g_config.Clear();
 	g_callbacks.Clear();
 	snprintf(g_config.strDeviceName, 13, "CECTester");
@@ -77,7 +140,7 @@ int main() {
 	g_config.bActivateSource = 0;
 	g_callbacks.logMessage = &CecLogMessage;
 //	  g_callbacks.keyPress        = &CecKeyPress;
-//	  g_callbacks.commandReceived = &CecCommand;
+	g_callbacks.commandReceived = &CecCommand;
 //	  g_callbacks.alert           = &CecAlert;
 	g_config.callbacks = &g_callbacks;
 
@@ -98,13 +161,14 @@ int main() {
 		return 1;
 	}
 
-	// init video on targets that need this
+// init video on targets that need this
 	g_parser->InitVideoStandalone();
 
 	if (!g_bSingleCommand) {
 		std::cout << std::endl << "CEC Parser created - libCEC version " << g_parser->VersionToString(g_config.serverVersion).c_str() << std::endl;
 	}
 
+	/************************Autodetect device and open connection***********************/
 	if (g_strPort.empty()) {
 		if (!g_bSingleCommand)
 			std::cout << "no serial port given. trying autodetect: ";
@@ -132,13 +196,16 @@ int main() {
 		return 1;
 	}
 
-	if (!g_bSingleCommand)
-		std::cout << std::endl << "waiting for input" << std::endl;
+	/*******************************Subscrib to MQTT Topic*******************************/
+	std::cout << "Subscribing to topic " << TOPIC << " for client " << CLIENTID << " using QoS " << QOS << "\n" << std::endl;
+	MQTTClient_subscribe(client, TOPIC, QOS);
 
+	/**********************************Process behavior**********************************/
 	bool loopEnable = true;
 	int isOn = -1;
+	mqttEnableHyperion = false;
 	while (loopEnable) {
-		// Check Time
+		//----------------Check Time----------------
 		auto currentTime = std::chrono::system_clock::now();
 		std::time_t time = std::chrono::system_clock::to_time_t(currentTime);
 		struct tm *tmp = gmtime(&time);
@@ -152,28 +219,44 @@ int main() {
 			timeEnableHyperion = true;
 		}
 
-		// Get CEC Status
-		cec_power_status iPower = g_parser->GetDevicePowerStatus((cec_logical_address) 0);
-		std::cout << std::endl << "power status: " << g_parser->ToString(iPower) << std::endl;
+		//----------------Get power status but only if it's necessary----------------
+		bool cecEnableHyperion = false;
+		if (timeEnableHyperion || mqttEnableHyperion) {
+			cec_power_status iPower = g_parser->GetDevicePowerStatus((cec_logical_address) 0);
+			std::cout << std::endl << "power status: " << g_parser->ToString(iPower) << std::endl;
 
-		// Decide to power of or on hyperion
-		if ((iPower == cec_power_status::CEC_POWER_STATUS_ON || iPower == cec_power_status::CEC_POWER_STATUS_IN_TRANSITION_STANDBY_TO_ON) && (isOn != 1) && timeEnableHyperion) {
+			if (iPower == cec_power_status::CEC_POWER_STATUS_ON || iPower == cec_power_status::CEC_POWER_STATUS_IN_TRANSITION_STANDBY_TO_ON) {
+				cecEnableHyperion = true;
+			} else if (iPower == cec_power_status::CEC_POWER_STATUS_STANDBY || iPower == cec_power_status::CEC_POWER_STATUS_IN_TRANSITION_ON_TO_STANDBY
+					|| iPower == cec_power_status::CEC_POWER_STATUS_UNKNOWN) {
+				cecEnableHyperion = false;
+			}
+		}
+
+		//----------------Decide to power of or on hyperion----------------
+		if (cecEnableHyperion && (timeEnableHyperion || mqttEnableHyperion) && (isOn != 1)) {
 			system("hyperion-remote --clearall");
 			system("hyperion-remote --luminanceMin 0.15");
 			isOn = 1;
-		} else if ((iPower == cec_power_status::CEC_POWER_STATUS_STANDBY || iPower == cec_power_status::CEC_POWER_STATUS_IN_TRANSITION_ON_TO_STANDBY
-				|| iPower == cec_power_status::CEC_POWER_STATUS_UNKNOWN) && (isOn != 0)) {
+		} else if (mqttEnableHyperion && !cecEnableHyperion && (isOn != 2)) {
+			system("hyperion-remote --priority 0 --color FF8C00");
+			isOn = 2;
+		} else if (!cecEnableHyperion && !mqttEnableHyperion && (isOn != 0)) {
 			system("hyperion-remote --priority 0 --color black");
 			system("hyperion-remote --luminanceMin 0.0");
 			isOn = 0;
 		}
 
-		// Avoid excessive load on CEC connection
+		// Avoid excessive load on CEC connection and time calculation
 		sleep(5);
 	}
 
 	g_parser->Close();
 	UnloadLibCec(g_parser);
+
+	MQTTClient_unsubscribe(client, TOPIC);
+	MQTTClient_disconnect(client, 10000);
+	MQTTClient_destroy(&client);
 
 	return 0;
 }
