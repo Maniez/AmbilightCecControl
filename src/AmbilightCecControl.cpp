@@ -22,9 +22,9 @@
 #include <ctime>
 #include <time.h>
 
-#include <usr/local/include/libcec/cec.h>
-#include <usr/local/include/libcec/cecloader.h>
-#include <usr/local/include/libcec/cectypes.h>
+#include <libcec/cec.h>
+#include <libcec/cecloader.h>
+#include <libcec/cectypes.h>
 using namespace std;
 
 using namespace CEC;
