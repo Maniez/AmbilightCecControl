@@ -131,7 +131,7 @@ int main() {
 	do {
 		if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS) {
 			std::cout << "Failed to connect, return code " << rc << std::endl;
-			sleep(5);
+			sleep(20);
 		}	
 	} while(rc != MQTTCLIENT_SUCCESS);
 	
