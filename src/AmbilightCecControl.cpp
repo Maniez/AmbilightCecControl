@@ -127,10 +127,14 @@ int main() {
 
 	MQTTClient_setCallbacks(client, NULL, connlost, msgarrvd, delivered);
 
-	if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS) {
-		std::cout << "Failed to connect, return code " << rc << std::endl;
-		exit(EXIT_FAILURE);
-	}
+	
+	do {
+		if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS) {
+			std::cout << "Failed to connect, return code " << rc << std::endl;
+			sleep(5);
+		}	
+	} while(rc != MQTTCLIENT_SUCCESS);
+	
 
 	/**********************************Init CEC Client***********************************/
 	g_config.Clear();
