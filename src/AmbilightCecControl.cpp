@@ -40,6 +40,7 @@ char TOPIC[] = "rpi/ambilight/control";
 
 volatile MQTTClient_deliveryToken deliveredtoken;
 volatile bool mqttEnableHyperion;
+volatile bool enableReconnect;
 
 ICECCallbacks g_callbacks;
 libcec_configuration g_config;
@@ -109,8 +110,9 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 
 void connlost(void *context, char *cause) {
 	(void) context;
-	printf("\nConnection lost\n");
-	printf("     cause: %s\n", cause);
+	std::cout << "\nConnection lost\n";
+	std::cout << "     cause: " << cause << std::endl;
+	enableReconnect = true;
 }
 
 int main() {
@@ -131,6 +133,7 @@ int main() {
 		std::cout << "Failed to connect, return code " << rc << std::endl;
 		exit(EXIT_FAILURE);
 	}
+	enableReconnect = false;
 
 	/**********************************Init CEC Client***********************************/
 	g_config.Clear();
@@ -138,7 +141,7 @@ int main() {
 	snprintf(g_config.strDeviceName, 13, "CECTester");
 	g_config.clientVersion = LIBCEC_VERSION_CURRENT;
 	g_config.bActivateSource = 0;
-	g_callbacks.logMessage = &CecLogMessage;
+//	g_callbacks.logMessage = &CecLogMessage;
 //	  g_callbacks.keyPress        = &CecKeyPress;
 	g_callbacks.commandReceived = &CecCommand;
 //	  g_callbacks.alert           = &CecAlert;
@@ -245,6 +248,19 @@ int main() {
 			system("hyperion-remote --priority 0 --color black");
 			system("hyperion-remote --luminanceMin 0.0");
 			isOn = 0;
+		}
+
+		//----------------Try reconnet so MQTT server----------------
+		if (enableReconnect) {
+			if ((rc = MQTTClient_connect(client, &conn_opts)) == MQTTCLIENT_SUCCESS) {
+				std::cout << "Maybe reconnected, return code " << rc << std::endl;
+				if (MQTTClient_isConnected(client)) {
+					std::cout << "Safely reconnected" << std::endl;
+					enableReconnect = false;
+				}
+			} else {
+				std::cout << "Failed to connect, return code " << rc << std::endl;
+			}
 		}
 
 		// Avoid excessive load on CEC connection and time calculation
