@@ -247,7 +247,7 @@ int main() {
 			system("hyperion-remote --luminanceMin 0.15");
 			isOn = 1;
 		} else if (mqttEnableHyperion && !cecEnableHyperion && (isOn != 2)) {
-			system("hyperion-remote --priority 0 --color FF8C00");
+			system("hyperion-remote --priority 0 --color FF9C00");
 			isOn = 2;
 		} else if (!cecEnableHyperion && !mqttEnableHyperion && (isOn != 0)) {
 			system("hyperion-remote --priority 0 --color black");
