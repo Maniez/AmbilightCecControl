@@ -81,6 +81,9 @@ void CecCommand(void *cbParam, const cec_command *command) {
 	(void) cbParam;
 	(void) command;
 	std::cout << "Command received" << std::endl;
+	std::cout << command->initiator << std::endl;
+	std::cout << command->destination << std::endl;
+	std::cout << command->opcode << std::endl;
 }
 
 void delivered(void *context, MQTTClient_deliveryToken dt) {
@@ -133,8 +136,8 @@ int main() {
 		if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS) {
 			std::cout << "Failed to connect, return code " << rc << std::endl;
 			sleep(20);
-		}	
-	} while(rc != MQTTCLIENT_SUCCESS);
+		}
+	} while (rc != MQTTCLIENT_SUCCESS);
 
 	/**********************************Init CEC Client***********************************/
 	g_config.Clear();
@@ -238,7 +241,8 @@ int main() {
 		}
 
 		//----------------Decide to power of or on hyperion----------------
-		if (cecEnableHyperion && (timeEnableHyperion || mqttEnableHyperion) && (isOn != 1)) {
+//		if (cecEnableHyperion && (timeEnableHyperion || mqttEnableHyperion) && (isOn != 1)) {
+		if (cecEnableHyperion && mqttEnableHyperion && (isOn != 1)) {
 			system("hyperion-remote --clearall");
 			system("hyperion-remote --luminanceMin 0.15");
 			isOn = 1;
