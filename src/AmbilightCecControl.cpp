@@ -228,7 +228,8 @@ int main() {
 
 		//----------------Get power status but only if it's necessary----------------
 		bool cecEnableHyperion = false;
-		if (timeEnableHyperion || mqttEnableHyperion) {
+//		if (timeEnableHyperion || mqttEnableHyperion) {
+		if (mqttEnableHyperion) {
 			cec_power_status iPower = g_parser->GetDevicePowerStatus((cec_logical_address) 0);
 			std::cout << std::endl << "power status: " << g_parser->ToString(iPower) << std::endl;
 

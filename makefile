@@ -1,4 +1,4 @@
-TARGET ?= ambilightCecCeontrol.out
+TARGET ?= ambilightCecControl.out
 SRC_DIRS ?= ./src
 CC = g++
 
