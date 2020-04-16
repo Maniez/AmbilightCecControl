@@ -114,7 +114,7 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 void connlost(void *context, char *cause) {
 	(void) context;
 	std::cout << "\nConnection lost\n";
-	std::cout << "     cause: " << cause << std::endl;
+	//std::cout << "     cause: " << cause << std::endl;
 	enableReconnect = true;
 }
 
@@ -133,7 +133,8 @@ int main() {
 	MQTTClient_setCallbacks(client, NULL, connlost, msgarrvd, delivered);
 
 	do {
-		if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS) {
+		rc = MQTTClient_connect(client, &conn_opts);
+		if (rc != MQTTCLIENT_SUCCESS) {
 			std::cout << "Failed to connect, return code " << rc << std::endl;
 			sleep(20);
 		}
@@ -210,6 +211,7 @@ int main() {
 	/**********************************Process behavior**********************************/
 	bool loopEnable = true;
 	int isOn = -1;
+	int reconnectCounter = 0;
 	mqttEnableHyperion = false;
 	while (loopEnable) {
 		//----------------Check Time----------------
@@ -258,14 +260,18 @@ int main() {
 
 		//----------------Try reconnet so MQTT server----------------
 		if (enableReconnect) {
-			if ((rc = MQTTClient_connect(client, &conn_opts)) == MQTTCLIENT_SUCCESS) {
+			std::cout << "Try reconnect " << reconnectCounter << std::endl;
+			rc = MQTTClient_connect(client, &conn_opts);
+			if (rc == MQTTCLIENT_SUCCESS) {
 				std::cout << "Maybe reconnected, return code " << rc << std::endl;
 				if (MQTTClient_isConnected(client)) {
 					std::cout << "Safely reconnected" << std::endl;
 					enableReconnect = false;
+					reconnectCounter = 0;
 				}
 			} else {
 				std::cout << "Failed to connect, return code " << rc << std::endl;
+				reconnectCounter++;
 			}
 		}
 
