@@ -34,13 +34,15 @@ using namespace CEC;
 
 char ADDRESS[] = "tcp://192.168.1.26:1883";
 char CLIENTID[] = "Ambilight RPI";
-char TOPIC[] = "rpi/ambilight/control";
+char Power[] = "rpi/ambilight/control";
+char Color[] = "rpi/ambilight/color";
 #define QOS         1
 #define TIMEOUT     10000L
 
 volatile MQTTClient_deliveryToken deliveredtoken;
 volatile bool mqttEnableHyperion;
 volatile bool enableReconnect;
+volatile bool colorUpdateAvailable;
 
 ICECCallbacks g_callbacks;
 libcec_configuration g_config;
@@ -205,8 +207,8 @@ int main() {
 	}
 
 	/*******************************Subscrib to MQTT Topic*******************************/
-	std::cout << "Subscribing to topic " << TOPIC << " for client " << CLIENTID << " using QoS " << QOS << "\n" << std::endl;
-	MQTTClient_subscribe(client, TOPIC, QOS);
+	std::cout << "Subscribing to topic " << Power << " for client " << CLIENTID << " using QoS " << QOS << "\n" << std::endl;
+	MQTTClient_subscribe(client, Power, QOS);
 
 	/**********************************Process behavior**********************************/
 	bool loopEnable = true;
@@ -282,7 +284,7 @@ int main() {
 	g_parser->Close();
 	UnloadLibCec(g_parser);
 
-	MQTTClient_unsubscribe(client, TOPIC);
+	MQTTClient_unsubscribe(client, Power);
 	MQTTClient_disconnect(client, 10000);
 	MQTTClient_destroy(&client);
 
