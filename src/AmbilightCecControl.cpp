@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <cstdio>
+#include <cstring>
 #include <fcntl.h>
 #include <iostream>
 #include <fstream>
@@ -36,6 +37,8 @@ char ADDRESS[] = "tcp://192.168.1.26:1883";
 char CLIENTID[] = "Ambilight RPI";
 char Power[] = "rpi/ambilight/control";
 char Color[] = "rpi/ambilight/color";
+
+char sendColor[7] = "FF9C00";
 #define QOS         1
 #define TIMEOUT     10000L
 
@@ -97,15 +100,37 @@ void delivered(void *context, MQTTClient_deliveryToken dt) {
 int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message) {
 	(void) context;
 	(void) topicLen;
+	char red[3];
+	char green[3];
+	char blue[3];
+
+	char temp[40];
+
+	strncpy(temp, (char*) message->payload, message->payloadlen);
+	temp[message->payloadlen] = '\0';
 
 	std::cout << "Message arrived" << std::endl;
 	std::cout << "     topic: " << topicName << std::endl;
 	std::cout << "   message: " << (char*) message->payload << std::endl;
-
-	if (strcmp("true", (char*) message->payload) == 0) {
-		mqttEnableHyperion = true;
-	} else if (strcmp("false", (char*) message->payload) == 0) {
-		mqttEnableHyperion = false;
+	if (strcmp(Power, (char*) topicName) == 0) {
+		if (strcmp("true", (char*) message->payload) == 0) {
+			mqttEnableHyperion = true;
+		} else if (strcmp("false", (char*) message->payload) == 0) {
+			mqttEnableHyperion = false;
+		}
+	} else if (strcmp(Color, (char*) topicName) == 0) {
+		colorUpdateAvailable = true;
+		sprintf(red, "%02x", strtol(strtok((char*) temp, ","), NULL, 10));
+		sprintf(green, "%02x", strtol(strtok(NULL, ","), NULL, 10));
+		sprintf(blue, "%02x", strtol(strtok(NULL, ","), NULL, 10));
+		sendColor[0] = red[0];
+		sendColor[1] = red[1];
+		sendColor[2] = green[0];
+		sendColor[3] = green[1];
+		sendColor[4] = blue[0];
+		sendColor[5] = blue[1];
+		sendColor[6] = '\0';
+		std::cout << "Color: " << sendColor << std::endl;
 	}
 
 	MQTTClient_freeMessage(&message);
@@ -209,6 +234,8 @@ int main() {
 	/*******************************Subscrib to MQTT Topic*******************************/
 	std::cout << "Subscribing to topic " << Power << " for client " << CLIENTID << " using QoS " << QOS << "\n" << std::endl;
 	MQTTClient_subscribe(client, Power, QOS);
+	std::cout << "Subscribing to topic " << Color << " for client " << CLIENTID << " using QoS " << QOS << "\n" << std::endl;
+	MQTTClient_subscribe(client, Color, QOS);
 
 	/**********************************Process behavior**********************************/
 	bool loopEnable = true;
@@ -251,9 +278,12 @@ int main() {
 			system("hyperion-remote --clearall");
 			system("hyperion-remote --luminanceMin 0.15");
 			isOn = 1;
-		} else if (mqttEnableHyperion && !cecEnableHyperion && (isOn != 2)) {
-			system("hyperion-remote --priority 0 --color FF9C00");
+		} else if (mqttEnableHyperion && !cecEnableHyperion && (isOn != 2 || colorUpdateAvailable)) {
+			char command[100];
+			sprintf(command, "hyperion-remote --priority 0 --color %s", sendColor);
+			system(command);
 			isOn = 2;
+			colorUpdateAvailable = false;
 		} else if (!cecEnableHyperion && !mqttEnableHyperion && (isOn != 0)) {
 			system("hyperion-remote --priority 0 --color black");
 			system("hyperion-remote --luminanceMin 0.0");
