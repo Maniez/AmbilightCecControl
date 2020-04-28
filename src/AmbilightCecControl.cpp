@@ -19,9 +19,11 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include <stdio.h>
 #include <chrono>
 #include <ctime>
 #include <time.h>
+#include <semaphore.h>
 
 #include <libcec/cec.h>
 #include <libcec/cecloader.h>
@@ -30,9 +32,11 @@
 #include "MQTTClient.h"
 
 using namespace std;
-
 using namespace CEC;
 
+sem_t mutex;
+
+// MQTT Variables
 char ADDRESS[] = "tcp://192.168.1.26:1883";
 char CLIENTID[] = "Ambilight RPI";
 char Power[] = "rpi/ambilight/control";
@@ -47,6 +51,7 @@ volatile bool mqttEnableHyperion;
 volatile bool enableReconnect;
 volatile bool colorUpdateAvailable;
 
+// CEC Variables
 ICECCallbacks g_callbacks;
 libcec_configuration g_config;
 int g_cecLogLevel(-1);
@@ -135,6 +140,8 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 
 	MQTTClient_freeMessage(&message);
 	MQTTClient_free(topicName);
+
+	sem_post(&mutex);
 	return 1;
 }
 
@@ -146,6 +153,8 @@ void connlost(void *context, char *cause) {
 }
 
 int main() {
+	sem_init(&mutex, 0, 0);
+	struct timespec tm;
 
 	/**********************************Init MQTT Client**********************************/
 
@@ -311,7 +320,9 @@ int main() {
 		}
 
 		// Avoid excessive load on CEC connection and time calculation
-		sleep(5);
+		clock_gettime(CLOCK_REALTIME, &tm);
+		tm.tv_sec += 5;
+		sem_timedwait( &mutex, &tm );
 	}
 
 	g_parser->Close();
