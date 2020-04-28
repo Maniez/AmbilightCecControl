@@ -241,7 +241,6 @@ int main() {
 	bool loopEnable = true;
 	int isOn = -1;
 	int reconnectCounter = 0;
-	mqttEnableHyperion = false;
 	while (loopEnable) {
 		//----------------Check Time----------------
 		auto currentTime = std::chrono::system_clock::now();
@@ -297,7 +296,11 @@ int main() {
 			if (rc == MQTTCLIENT_SUCCESS) {
 				std::cout << "Maybe reconnected, return code " << rc << std::endl;
 				if (MQTTClient_isConnected(client)) {
-					std::cout << "Safely reconnected" << std::endl;
+					std::cout << "Safely reconnected, subscribe topics " << std::endl;
+					std::cout << "Subscribing to topic " << Power << " for client " << CLIENTID << " using QoS " << QOS << "\n" << std::endl;
+					MQTTClient_subscribe(client, Power, QOS);
+					std::cout << "Subscribing to topic " << Color << " for client " << CLIENTID << " using QoS " << QOS << "\n" << std::endl;
+					MQTTClient_subscribe(client, Color, QOS);
 					enableReconnect = false;
 					reconnectCounter = 0;
 				}
