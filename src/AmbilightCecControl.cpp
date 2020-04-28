@@ -120,9 +120,9 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 		}
 	} else if (strcmp(Color, (char*) topicName) == 0) {
 		colorUpdateAvailable = true;
-		sprintf(red, "%02x", strtol(strtok((char*) temp, ","), NULL, 10));
-		sprintf(green, "%02x", strtol(strtok(NULL, ","), NULL, 10));
-		sprintf(blue, "%02x", strtol(strtok(NULL, ","), NULL, 10));
+		sprintf(red, "%02x", (unsigned int) strtol(strtok((char*) temp, ","), NULL, 10));
+		sprintf(green, "%02x", (unsigned int) strtol(strtok(NULL, ","), NULL, 10));
+		sprintf(blue, "%02x", (unsigned int) strtol(strtok(NULL, ","), NULL, 10));
 		sendColor[0] = red[0];
 		sendColor[1] = red[1];
 		sendColor[2] = green[0];
