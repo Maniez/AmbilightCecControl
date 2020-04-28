@@ -322,7 +322,7 @@ int main() {
 		// Avoid excessive load on CEC connection and time calculation
 		clock_gettime(CLOCK_REALTIME, &tm);
 		tm.tv_sec += 5;
-		sem_timedwait( &mutex, &tm );
+		sem_timedwait(&mutex, &tm);
 	}
 
 	g_parser->Close();

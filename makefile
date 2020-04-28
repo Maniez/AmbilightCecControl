@@ -10,7 +10,7 @@ INC_DIRS := $(shell find $(SRC_DIRS) -type d)
 INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 
 CPPFLAGS ?= $(INC_FLAGS) -Wall
-LDFLAGS ?= -ldl -lpaho-mqtt3c
+LDFLAGS ?= -ldl -lpaho-mqtt3c -lpthread
 
 $(TARGET): $(OBJS)
 	$(CC) $(LDFLAGS) $(OBJS) -o $@ $(LOADLIBES) $(LDLIBS)
