@@ -1,0 +1,11 @@
+.cproject
+.project
+.settings/language.settings.xml
+Debug/Ambiligt
+Debug/makefile
+Debug/objects.mk
+Debug/sources.mk
+Debug/src/AmbiligtCecControl.d
+Debug/src/AmbiligtCecControl.o
+Debug/src/subdir.mk
+Debug/
