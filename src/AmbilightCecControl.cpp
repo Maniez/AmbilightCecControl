@@ -206,6 +206,11 @@ int main() {
 	sem_init(&mutex, 0, 0);
 	struct timespec tm;
 
+	logInfo(1, "hallo %d", 10);
+
+	while (1)
+		;
+
 	/**********************************Init MQTT Client**********************************/
 
 	MQTTClient client;
