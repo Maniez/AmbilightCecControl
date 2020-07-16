@@ -9,6 +9,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cstring>
+#include <ostream>
 #include <fcntl.h>
 #include <iostream>
 #include <fstream>
@@ -18,6 +19,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include "colormod.hpp" // namespace Color
 
 #include <stdio.h>
 #include <chrono>
@@ -30,6 +32,9 @@
 #include <libcec/cectypes.h>
 
 #include "MQTTClient.h"
+
+#define DEBUG 0
+#define COLORPRINT 1
 
 using namespace std;
 using namespace CEC;
@@ -59,6 +64,43 @@ int g_cecDefaultLogLevel(CEC_LOG_ALL);
 ICECAdapter *g_parser;
 bool g_bSingleCommand(false);
 std::string g_strPort;
+
+void logInfo(uint8_t colorSelektion, char *message) {
+	auto currentTime = std::chrono::system_clock::now();
+	std::time_t time = std::chrono::system_clock::to_time_t(currentTime);
+	struct tm *actTime = gmtime(&time);
+
+	Colormod::Modifier green(Colormod::FG_GREEN);
+	Colormod::Modifier blue(Colormod::FG_BLUE);
+	Colormod::Modifier red(Colormod::FG_RED);
+	Colormod::Modifier def(Colormod::FG_DEFAULT);
+
+	Colormod::Modifier textColor(Colormod::FG_DEFAULT);
+	if (colorSelektion == 1) {
+		textColor = green;
+	} else if (colorSelektion == 2) {
+		textColor = blue;
+	} else if (colorSelektion == 3) {
+		textColor = red;
+	} else {
+		textColor = def;
+	}
+
+	cout << "[" << actTime->tm_year << "-" << actTime->tm_mday << "-" << actTime->tm_mon << " ";
+	cout << actTime->tm_hour << ":" << actTime->tm_min << ":" << actTime->tm_sec << "] - ";
+
+#if COLORPRINT == 1
+	cout << textColor;
+	cout << "[" << actTime->tm_year << "-" << actTime->tm_mday << "-" << actTime->tm_mon << " ";
+	cout << actTime->tm_hour << ":" << actTime->tm_min << ":" << actTime->tm_sec << "] - ";
+	cout << message;
+	cout << def << endl;
+#else
+	cout << "[" << actTime->tm_year << "-" << actTime->tm_mday << "-" << actTime->tm_mon << " ";
+	cout << actTime->tm_hour << ":" << actTime->tm_min << ":" << actTime->tm_sec << "] - ";
+	cout << message << endl;
+#endif
+}
 
 void CecLogMessage(void *cbParam, const cec_log_message *message) {
 	(void) cbParam;
@@ -90,10 +132,12 @@ void CecLogMessage(void *cbParam, const cec_log_message *message) {
 void CecCommand(void *cbParam, const cec_command *command) {
 	(void) cbParam;
 	(void) command;
+#if DEBUG == 1
 	std::cout << "Command received" << std::endl;
 	std::cout << command->initiator << std::endl;
 	std::cout << command->destination << std::endl;
 	std::cout << command->opcode << std::endl;
+#endif
 }
 
 void delivered(void *context, MQTTClient_deliveryToken dt) {
@@ -148,13 +192,18 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 void connlost(void *context, char *cause) {
 	(void) context;
 	std::cout << "\nConnection lost\n";
-	//std::cout << "     cause: " << cause << std::endl;
+//std::cout << "     cause: " << cause << std::endl;
 	enableReconnect = true;
 }
 
 int main() {
 	sem_init(&mutex, 0, 0);
 	struct timespec tm;
+
+	logInfo(1, "Hallo");
+
+	while (1)
+		;
 
 	/**********************************Init MQTT Client**********************************/
 
@@ -250,6 +299,7 @@ int main() {
 	bool loopEnable = true;
 	int isOn = -1;
 	int reconnectCounter = 0;
+	cec_power_status iPower_old = cec_power_status::CEC_POWER_STATUS_UNKNOWN;
 	while (loopEnable) {
 		//----------------Check Time----------------
 		auto currentTime = std::chrono::system_clock::now();
@@ -270,7 +320,10 @@ int main() {
 //		if (timeEnableHyperion || mqttEnableHyperion) {
 		if (mqttEnableHyperion) {
 			cec_power_status iPower = g_parser->GetDevicePowerStatus((cec_logical_address) 0);
-			std::cout << std::endl << "power status: " << g_parser->ToString(iPower) << std::endl;
+			if (iPower_old != iPower) {
+				std::cout << std::endl << "power status: " << g_parser->ToString(iPower) << std::endl;
+				iPower_old = iPower;
+			}
 
 			if (iPower == cec_power_status::CEC_POWER_STATUS_ON || iPower == cec_power_status::CEC_POWER_STATUS_IN_TRANSITION_STANDBY_TO_ON) {
 				cecEnableHyperion = true;
