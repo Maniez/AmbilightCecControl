@@ -165,8 +165,8 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 	temp[message->payloadlen] = '\0';
 
 	logInfo(0, "Message arrived");
-	logInfo(0, "     topic: %s", topicName);
-	logInfo(0, "   message: %s", (char*) message->payload);
+	logInfo(0, "topic: %s", topicName);
+	logInfo(1, "message: %s", (char*) message->payload);
 	if (strcmp(Power, (char*) topicName) == 0) {
 		if (strcmp("true", (char*) message->payload) == 0) {
 			mqttEnableHyperion = true;
@@ -279,7 +279,7 @@ int main() {
 			return 1;
 		} else {
 			if (!g_bSingleCommand) {
-				logInfo(0, " path:      %s com port: %s", devices[0].strComPath, devices[0].strComName);
+				logInfo(0, "path: %s com port: %s", devices[0].strComPath, devices[0].strComName);
 			}
 			g_strPort = devices[0].strComName;
 		}
@@ -325,7 +325,7 @@ int main() {
 		if (mqttEnableHyperion) {
 			cec_power_status iPower = g_parser->GetDevicePowerStatus((cec_logical_address) 0);
 			if (iPower_old != iPower) {
-				logInfo(0, "power status: %d", iPower);
+				logInfo(1, "power status: %s", g_parser->ToString(iPower));
 				iPower_old = iPower;
 			}
 
