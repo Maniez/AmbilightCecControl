@@ -20,6 +20,8 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include "colormod.hpp" // namespace Color
+#include <stdio.h>
+#include <stdarg.h>
 
 #include <stdio.h>
 #include <chrono>
@@ -65,7 +67,14 @@ ICECAdapter *g_parser;
 bool g_bSingleCommand(false);
 std::string g_strPort;
 
-void logInfo(uint8_t colorSelektion, char *message) {
+void logInfo(uint8_t colorSelektion, char const *message, ...) {
+	va_list args;
+	char temp[128] = { 0 };
+
+	va_start(args, message);
+	vsnprintf(temp, 128, message, args);
+	va_end(args);
+
 	auto currentTime = std::chrono::system_clock::now();
 	std::time_t time = std::chrono::system_clock::to_time_t(currentTime);
 	struct tm *actTime = gmtime(&time);
@@ -86,19 +95,16 @@ void logInfo(uint8_t colorSelektion, char *message) {
 		textColor = def;
 	}
 
-	cout << "[" << actTime->tm_year << "-" << actTime->tm_mday << "-" << actTime->tm_mon << " ";
-	cout << actTime->tm_hour << ":" << actTime->tm_min << ":" << actTime->tm_sec << "] - ";
-
 #if COLORPRINT == 1
 	cout << textColor;
 	cout << "[" << actTime->tm_year << "-" << actTime->tm_mday << "-" << actTime->tm_mon << " ";
 	cout << actTime->tm_hour << ":" << actTime->tm_min << ":" << actTime->tm_sec << "] - ";
-	cout << message;
+	cout << temp;
 	cout << def << endl;
 #else
 	cout << "[" << actTime->tm_year << "-" << actTime->tm_mday << "-" << actTime->tm_mon << " ";
 	cout << actTime->tm_hour << ":" << actTime->tm_min << ":" << actTime->tm_sec << "] - ";
-	cout << message << endl;
+	cout << temp << endl;
 #endif
 }
 
@@ -125,7 +131,7 @@ void CecLogMessage(void *cbParam, const cec_log_message *message) {
 		default:
 			break;
 		}
-		printf("%s[%16lld]\t%s\n", strLevel.c_str(), message->time, message->message);
+		logInfo(0, "%s[%16lld]\t%s\n", strLevel.c_str(), message->time, message->message);
 	}
 }
 
@@ -142,7 +148,7 @@ void CecCommand(void *cbParam, const cec_command *command) {
 
 void delivered(void *context, MQTTClient_deliveryToken dt) {
 	(void) context;
-	printf("Message with token value %d delivery confirmed\n", dt);
+	logInfo(0, "Message with token value %d delivery confirmed\n", dt);
 	deliveredtoken = dt;
 }
 
@@ -158,9 +164,9 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 	strncpy(temp, (char*) message->payload, message->payloadlen);
 	temp[message->payloadlen] = '\0';
 
-	std::cout << "Message arrived" << std::endl;
-	std::cout << "     topic: " << topicName << std::endl;
-	std::cout << "   message: " << (char*) message->payload << std::endl;
+	logInfo(0, "Message arrived");
+	logInfo(0, "     topic: %s", topicName);
+	logInfo(0, "   message: %s", (char*) message->payload);
 	if (strcmp(Power, (char*) topicName) == 0) {
 		if (strcmp("true", (char*) message->payload) == 0) {
 			mqttEnableHyperion = true;
@@ -179,7 +185,7 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 		sendColor[4] = blue[0];
 		sendColor[5] = blue[1];
 		sendColor[6] = '\0';
-		std::cout << "Color: " << sendColor << std::endl;
+		logInfo(0, "Color: %s", sendColor);
 	}
 
 	MQTTClient_freeMessage(&message);
@@ -191,19 +197,14 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 
 void connlost(void *context, char *cause) {
 	(void) context;
-	std::cout << "\nConnection lost\n";
-//std::cout << "     cause: " << cause << std::endl;
+	logInfo(3, "Connection lost");
+	//std::cout << "     cause: " << cause << std::endl;
 	enableReconnect = true;
 }
 
 int main() {
 	sem_init(&mutex, 0, 0);
 	struct timespec tm;
-
-	logInfo(1, "Hallo");
-
-	while (1)
-		;
 
 	/**********************************Init MQTT Client**********************************/
 
@@ -220,7 +221,7 @@ int main() {
 	do {
 		rc = MQTTClient_connect(client, &conn_opts);
 		if (rc != MQTTCLIENT_SUCCESS) {
-			std::cout << "Failed to connect, return code " << rc << std::endl;
+			logInfo(0, "Failed to connect, return code %d", rc);
 			sleep(20);
 		}
 	} while (rc != MQTTCLIENT_SUCCESS);
@@ -242,13 +243,13 @@ int main() {
 
 	if (g_config.deviceTypes.IsEmpty()) {
 		if (!g_bSingleCommand)
-			std::cout << "No device type given. Using 'TV device'" << std::endl;
+			logInfo(0, "No device type given. Using 'TV device");
 		g_config.deviceTypes.Add(CEC_DEVICE_TYPE_RECORDING_DEVICE);
 	}
 
 	g_parser = LibCecInitialise(&g_config);
 	if (!g_parser) {
-		std::cout << "Cannot load libcec.so" << std::endl;
+		logInfo(0, "Cannot load libcec.so");
 		if (g_parser)
 			UnloadLibCec(g_parser);
 		return 1;
@@ -258,41 +259,42 @@ int main() {
 	g_parser->InitVideoStandalone();
 
 	if (!g_bSingleCommand) {
-		std::cout << std::endl << "CEC Parser created - libCEC version " << g_parser->VersionToString(g_config.serverVersion).c_str() << std::endl;
+		logInfo(0, "CEC Parser created - libCEC version %s", g_parser->VersionToString(g_config.serverVersion).c_str());
 	}
 
 	/************************Autodetect device and open connection***********************/
 	if (g_strPort.empty()) {
 		if (!g_bSingleCommand)
-			std::cout << "no serial port given. trying autodetect: ";
+			logInfo(0, "no serial port given. trying autodetect: ");
 		cec_adapter_descriptor devices[10];
 		uint8_t iDevicesFound = g_parser->DetectAdapters(devices, 10, NULL, true);
 		if (iDevicesFound <= 0) {
 			if (g_bSingleCommand)
-				std::cout << "autodetect ";
-			std::cout << "FAILED" << std::endl;
+				logInfo(3, "autodetect FAILED");
+			else
+				logInfo(3, "FAILED ");
 			UnloadLibCec(g_parser);
 			return 1;
 		} else {
 			if (!g_bSingleCommand) {
-				std::cout << std::endl << " path:     " << devices[0].strComPath << std::endl << " com port: " << devices[0].strComName << std::endl << std::endl;
+				logInfo(0, " path:      %s com port: %s", devices[0].strComPath, devices[0].strComName);
 			}
 			g_strPort = devices[0].strComName;
 		}
 	}
 
-	std::cout << "opening a connection to the CEC adapter..." << std::endl;
+	logInfo(0, "opening a connection to the CEC adapter...");
 
 	if (!g_parser->Open(g_strPort.c_str())) {
-		std::cout << std::endl << "unable to open the device on port %s" << g_strPort.c_str() << std::endl;
+		logInfo(3, "unable to open the device on port %s", g_strPort.c_str());
 		UnloadLibCec(g_parser);
 		return 1;
 	}
 
 	/*******************************Subscrib to MQTT Topic*******************************/
-	std::cout << "Subscribing to topic " << Power << " for client " << CLIENTID << " using QoS " << QOS << "\n" << std::endl;
+	logInfo(0, "Subscribing to topic %s for client %s using Qos %d", Power, CLIENTID, QOS);
 	MQTTClient_subscribe(client, Power, QOS);
-	std::cout << "Subscribing to topic " << Color << " for client " << CLIENTID << " using QoS " << QOS << "\n" << std::endl;
+	logInfo(0, "Subscribing to topic %s for client %s using Qos %d", Color, CLIENTID, QOS);
 	MQTTClient_subscribe(client, Color, QOS);
 
 	/**********************************Process behavior**********************************/
@@ -321,7 +323,7 @@ int main() {
 		if (mqttEnableHyperion) {
 			cec_power_status iPower = g_parser->GetDevicePowerStatus((cec_logical_address) 0);
 			if (iPower_old != iPower) {
-				std::cout << std::endl << "power status: " << g_parser->ToString(iPower) << std::endl;
+				logInfo(0, "power status: %d", iPower);
 				iPower_old = iPower;
 			}
 
@@ -353,21 +355,21 @@ int main() {
 
 		//----------------Try reconnet so MQTT server----------------
 		if (enableReconnect) {
-			std::cout << "Try reconnect " << reconnectCounter << std::endl;
+			logInfo(1, "Try reconnect %d", reconnectCounter);
 			rc = MQTTClient_connect(client, &conn_opts);
 			if (rc == MQTTCLIENT_SUCCESS) {
-				std::cout << "Maybe reconnected, return code " << rc << std::endl;
+				logInfo(2, "Maybe reconnected, return code %d", rc);
 				if (MQTTClient_isConnected(client)) {
-					std::cout << "Safely reconnected, subscribe topics " << std::endl;
-					std::cout << "Subscribing to topic " << Power << " for client " << CLIENTID << " using QoS " << QOS << "\n" << std::endl;
+					logInfo(1, "Safely reconnected, subscribe topics ", rc);
+					logInfo(0, "Subscribing to topic %s for client %s using Qos %d", Power, CLIENTID, QOS);
 					MQTTClient_subscribe(client, Power, QOS);
-					std::cout << "Subscribing to topic " << Color << " for client " << CLIENTID << " using QoS " << QOS << "\n" << std::endl;
+					logInfo(0, "Subscribing to topic %s for client %s using Qos %d", Color, CLIENTID, QOS);
 					MQTTClient_subscribe(client, Color, QOS);
 					enableReconnect = false;
 					reconnectCounter = 0;
 				}
 			} else {
-				std::cout << "Failed to connect, return code " << rc << std::endl;
+				logInfo(3, "Failed to connect, return code %d", rc);
 				reconnectCounter++;
 			}
 		}
