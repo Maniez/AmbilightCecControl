@@ -206,7 +206,7 @@ int main() {
 	sem_init(&mutex, 0, 0);
 	struct timespec tm;
 
-	popen("frontail /home/pi/AmbilightCecControl/prog.out.log", "r");
+	system("frontail /home/pi/AmbilightCecControl/prog.out.log &");
 
 	logInfo(1, "Starting");
 
