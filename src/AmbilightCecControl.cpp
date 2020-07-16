@@ -206,7 +206,7 @@ int main() {
 	sem_init(&mutex, 0, 0);
 	struct timespec tm;
 
-	logInfo(1, "hallo %d", 10);
+	logInfo(0, "Subscribing to topic %s for client %s using Qos %d", Power, CLIENTID, QOS);
 
 	while (1)
 		;
