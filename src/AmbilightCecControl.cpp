@@ -206,11 +206,6 @@ int main() {
 	sem_init(&mutex, 0, 0);
 	struct timespec tm;
 
-	logInfo(0, "Subscribing to topic %s for client %s using Qos %d", Power, CLIENTID, QOS);
-
-	while (1)
-		;
-
 	/**********************************Init MQTT Client**********************************/
 
 	MQTTClient client;
