@@ -206,6 +206,8 @@ int main() {
 	sem_init(&mutex, 0, 0);
 	struct timespec tm;
 
+	popen("frontail /home/pi/AmbilightCecControl/prog.out.log", "r");
+
 	logInfo(1, "Starting");
 
 	/**********************************Init MQTT Client**********************************/
