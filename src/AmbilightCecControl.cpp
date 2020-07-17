@@ -97,8 +97,8 @@ void logInfo(uint8_t colorSelektion, char const *message, ...) {
 
 #if COLORPRINT == 1
 	cout << textColor;
-	cout << "[" << actTime->tm_year << "-" << actTime->tm_mday << "-" << actTime->tm_mon << " ";
-	cout << actTime->tm_hour << ":" << actTime->tm_min << ":" << actTime->tm_sec << "] - ";
+	cout << "[" << (actTime->tm_year + 1900) << "-" << actTime->tm_mday << "-" << actTime->tm_mon << " ";
+	cout << (actTime->tm_hour + 2) << ":" << actTime->tm_min << ":" << actTime->tm_sec << "] - ";
 	cout << temp;
 	cout << def << endl;
 #else
@@ -205,8 +205,6 @@ void connlost(void *context, char *cause) {
 int main() {
 	sem_init(&mutex, 0, 0);
 	struct timespec tm;
-
-	system("frontail /home/pi/AmbilightCecControl/prog.out.log &");
 
 	logInfo(1, "Starting");
 
@@ -342,18 +340,52 @@ int main() {
 		//----------------Decide to power of or on hyperion----------------
 //		if (cecEnableHyperion && (timeEnableHyperion || mqttEnableHyperion) && (isOn != 1)) {
 		if (cecEnableHyperion && mqttEnableHyperion && (isOn != 1)) {
-			system("hyperion-remote --clearall");
-			system("hyperion-remote --luminanceMin 0.15");
+			FILE *out = popen("hyperion-remote --clearall", "r");
+			if (out != NULL) {
+				char line[256];
+				while (fgets(line, sizeof(line), out) != NULL)
+					fputs(line, stdout);
+				pclose(out);
+			}
+			out = popen("hyperion-remote --luminanceMin 0.15", "r");
+			if (out != NULL) {
+				char line[256];
+				while (fgets(line, sizeof(line), out) != NULL)
+					fputs(line, stdout);
+				pclose(out);
+			}
+//			system("hyperion-remote --clearall");
+//			system("hyperion-remote --luminanceMin 0.15");
 			isOn = 1;
 		} else if (mqttEnableHyperion && !cecEnableHyperion && (isOn != 2 || colorUpdateAvailable)) {
 			char command[100];
 			sprintf(command, "hyperion-remote --priority 0 --color %s", sendColor);
-			system(command);
+			FILE *out = popen(command, "r");
+			if (out != NULL) {
+				char line[256];
+				while (fgets(line, sizeof(line), out) != NULL)
+					logInfo(0, line);
+				pclose(out);
+			}
 			isOn = 2;
 			colorUpdateAvailable = false;
 		} else if (!cecEnableHyperion && !mqttEnableHyperion && (isOn != 0)) {
-			system("hyperion-remote --priority 0 --color black");
-			system("hyperion-remote --luminanceMin 0.0");
+			FILE *out = popen("hyperion-remote --priority 0 --color black", "r");
+			if (out != NULL) {
+				char line[256];
+				while (fgets(line, sizeof(line), out) != NULL)
+					fputs(line, stdout);
+				pclose(out);
+			}
+			out = popen("hyperion-remote --luminanceMin 0.0", "r");
+			if (out != NULL) {
+				char line[256];
+				while (fgets(line, sizeof(line), out) != NULL)
+					fputs(line, stdout);
+				pclose(out);
+			}
+//			system("hyperion-remote --priority 0 --color black");
+//			system("hyperion-remote --luminanceMin 0.0");
 			isOn = 0;
 		}
 
