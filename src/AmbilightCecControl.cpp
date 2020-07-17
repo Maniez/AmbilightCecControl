@@ -340,52 +340,18 @@ int main() {
 		//----------------Decide to power of or on hyperion----------------
 //		if (cecEnableHyperion && (timeEnableHyperion || mqttEnableHyperion) && (isOn != 1)) {
 		if (cecEnableHyperion && mqttEnableHyperion && (isOn != 1)) {
-			FILE *out = popen("hyperion-remote --clearall", "r");
-			if (out != NULL) {
-				char line[256];
-				while (fgets(line, sizeof(line), out) != NULL)
-					fputs(line, stdout);
-				pclose(out);
-			}
-			out = popen("hyperion-remote --luminanceMin 0.15", "r");
-			if (out != NULL) {
-				char line[256];
-				while (fgets(line, sizeof(line), out) != NULL)
-					fputs(line, stdout);
-				pclose(out);
-			}
-//			system("hyperion-remote --clearall");
-//			system("hyperion-remote --luminanceMin 0.15");
+			system("hyperion-remote --clearall");
+			system("hyperion-remote --luminanceMin 0.15");
 			isOn = 1;
 		} else if (mqttEnableHyperion && !cecEnableHyperion && (isOn != 2 || colorUpdateAvailable)) {
 			char command[100];
 			sprintf(command, "hyperion-remote --priority 0 --color %s", sendColor);
-			FILE *out = popen(command, "r");
-			if (out != NULL) {
-				char line[256];
-				while (fgets(line, sizeof(line), out) != NULL)
-					logInfo(0, line);
-				pclose(out);
-			}
+			system(command);
 			isOn = 2;
 			colorUpdateAvailable = false;
 		} else if (!cecEnableHyperion && !mqttEnableHyperion && (isOn != 0)) {
-			FILE *out = popen("hyperion-remote --priority 0 --color black", "r");
-			if (out != NULL) {
-				char line[256];
-				while (fgets(line, sizeof(line), out) != NULL)
-					fputs(line, stdout);
-				pclose(out);
-			}
-			out = popen("hyperion-remote --luminanceMin 0.0", "r");
-			if (out != NULL) {
-				char line[256];
-				while (fgets(line, sizeof(line), out) != NULL)
-					fputs(line, stdout);
-				pclose(out);
-			}
-//			system("hyperion-remote --priority 0 --color black");
-//			system("hyperion-remote --luminanceMin 0.0");
+			system("hyperion-remote --priority 0 --color black");
+			system("hyperion-remote --luminanceMin 0.0");
 			isOn = 0;
 		}
 
