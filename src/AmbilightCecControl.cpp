@@ -29,17 +29,13 @@
 #include <time.h>
 #include <semaphore.h>
 
-#include <libcec/cec.h>
-#include <libcec/cecloader.h>
-#include <libcec/cectypes.h>
-
 #include "MQTTClient.h"
 
 #define DEBUG 0
 #define COLORPRINT 1
+#define USETIME 0
 
 using namespace std;
-using namespace CEC;
 
 sem_t mutex;
 
@@ -48,24 +44,17 @@ char ADDRESS[] = "tcp://192.168.1.26:1883";
 char CLIENTID[] = "Ambilight RPI";
 char Power[] = "rpi/ambilight/control";
 char Color[] = "rpi/ambilight/color";
+char TvPowered[] = "rpi/ambilight/TvPowered";
 
 char sendColor[7] = "FF9C00";
 #define QOS         1
 #define TIMEOUT     10000L
 
 volatile MQTTClient_deliveryToken deliveredtoken;
-volatile bool mqttEnableHyperion;
-volatile bool enableReconnect;
-volatile bool colorUpdateAvailable;
-
-// CEC Variables
-ICECCallbacks g_callbacks;
-libcec_configuration g_config;
-int g_cecLogLevel(-1);
-int g_cecDefaultLogLevel(CEC_LOG_ALL);
-ICECAdapter *g_parser;
-bool g_bSingleCommand(false);
-std::string g_strPort;
+volatile bool mqttEnableHyperion = false;
+volatile bool mqttTvPowered = false;
+volatile bool enableReconnect = false;
+volatile bool colorUpdateAvailable = false;
 
 void logInfo(uint8_t colorSelektion, char const *message, ...) {
 	va_list args;
@@ -108,44 +97,6 @@ void logInfo(uint8_t colorSelektion, char const *message, ...) {
 #endif
 }
 
-void CecLogMessage(void *cbParam, const cec_log_message *message) {
-	(void) cbParam;
-	if ((message->level & g_cecLogLevel) == message->level) {
-		std::string strLevel;
-		switch (message->level) {
-		case CEC_LOG_ERROR:
-			strLevel = "ERROR:   ";
-			break;
-		case CEC_LOG_WARNING:
-			strLevel = "WARNING: ";
-			break;
-		case CEC_LOG_NOTICE:
-			strLevel = "NOTICE:  ";
-			break;
-		case CEC_LOG_TRAFFIC:
-			strLevel = "TRAFFIC: ";
-			break;
-		case CEC_LOG_DEBUG:
-			strLevel = "DEBUG:   ";
-			break;
-		default:
-			break;
-		}
-		logInfo(0, "%s[%16lld]\t%s\n", strLevel.c_str(), message->time, message->message);
-	}
-}
-
-void CecCommand(void *cbParam, const cec_command *command) {
-	(void) cbParam;
-	(void) command;
-#if DEBUG == 1
-	std::cout << "Command received" << std::endl;
-	std::cout << command->initiator << std::endl;
-	std::cout << command->destination << std::endl;
-	std::cout << command->opcode << std::endl;
-#endif
-}
-
 void delivered(void *context, MQTTClient_deliveryToken dt) {
 	(void) context;
 	logInfo(0, "Message with token value %d delivery confirmed\n", dt);
@@ -173,6 +124,7 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 		} else if (strcmp("false", (char*) message->payload) == 0) {
 			mqttEnableHyperion = false;
 		}
+		logInfo(1, "Power MQTT set to: %s", (char*) message->payload);
 	} else if (strcmp(Color, (char*) topicName) == 0) {
 		colorUpdateAvailable = true;
 		sprintf(red, "%02x", (unsigned int) strtol(strtok((char*) temp, ","), NULL, 10));
@@ -186,6 +138,13 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 		sendColor[5] = blue[1];
 		sendColor[6] = '\0';
 		logInfo(0, "Color: %s", sendColor);
+	} else if (strcmp(TvPowered, (char*) topicName) == 0) {
+		if (strcmp("true", (char*) message->payload) == 0) {
+			mqttTvPowered = true;
+		} else if (strcmp("false", (char*) message->payload) == 0) {
+			mqttTvPowered = false;
+		}
+		logInfo(1, "TV Power is: %s", (char*) message->payload);
 	}
 
 	MQTTClient_freeMessage(&message);
@@ -197,6 +156,7 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 
 void connlost(void *context, char *cause) {
 	(void) context;
+	(void) cause;
 	logInfo(3, "Connection lost");
 	//std::cout << "     cause: " << cause << std::endl;
 	enableReconnect = true;
@@ -228,84 +188,21 @@ int main() {
 		}
 	} while (rc != MQTTCLIENT_SUCCESS);
 
-	/**********************************Init CEC Client***********************************/
-	g_config.Clear();
-	g_callbacks.Clear();
-	snprintf(g_config.strDeviceName, 13, "CECTester");
-	g_config.clientVersion = LIBCEC_VERSION_CURRENT;
-	g_config.bActivateSource = 0;
-//	g_callbacks.logMessage = &CecLogMessage;
-//	  g_callbacks.keyPress        = &CecKeyPress;
-	g_callbacks.commandReceived = &CecCommand;
-//	  g_callbacks.alert           = &CecAlert;
-	g_config.callbacks = &g_callbacks;
-
-	if (g_cecLogLevel == -1)
-		g_cecLogLevel = g_cecDefaultLogLevel;
-
-	if (g_config.deviceTypes.IsEmpty()) {
-		if (!g_bSingleCommand)
-			logInfo(0, "No device type given. Using 'TV device");
-		g_config.deviceTypes.Add(CEC_DEVICE_TYPE_RECORDING_DEVICE);
-	}
-
-	g_parser = LibCecInitialise(&g_config);
-	if (!g_parser) {
-		logInfo(0, "Cannot load libcec.so");
-		if (g_parser)
-			UnloadLibCec(g_parser);
-		return 1;
-	}
-
-// init video on targets that need this
-	g_parser->InitVideoStandalone();
-
-	if (!g_bSingleCommand) {
-		logInfo(0, "CEC Parser created - libCEC version %s", g_parser->VersionToString(g_config.serverVersion).c_str());
-	}
-
-	/************************Autodetect device and open connection***********************/
-	if (g_strPort.empty()) {
-		if (!g_bSingleCommand)
-			logInfo(0, "no serial port given. trying autodetect: ");
-		cec_adapter_descriptor devices[10];
-		uint8_t iDevicesFound = g_parser->DetectAdapters(devices, 10, NULL, true);
-		if (iDevicesFound <= 0) {
-			if (g_bSingleCommand)
-				logInfo(3, "autodetect FAILED");
-			else
-				logInfo(3, "FAILED ");
-			UnloadLibCec(g_parser);
-			return 1;
-		} else {
-			if (!g_bSingleCommand) {
-				logInfo(0, "path: %s com port: %s", devices[0].strComPath, devices[0].strComName);
-			}
-			g_strPort = devices[0].strComName;
-		}
-	}
-
-	logInfo(0, "opening a connection to the CEC adapter...");
-
-	if (!g_parser->Open(g_strPort.c_str())) {
-		logInfo(3, "unable to open the device on port %s", g_strPort.c_str());
-		UnloadLibCec(g_parser);
-		return 1;
-	}
-
 	/*******************************Subscrib to MQTT Topic*******************************/
 	logInfo(0, "Subscribing to topic %s for client %s using Qos %d", Power, CLIENTID, QOS);
 	MQTTClient_subscribe(client, Power, QOS);
 	logInfo(0, "Subscribing to topic %s for client %s using Qos %d", Color, CLIENTID, QOS);
 	MQTTClient_subscribe(client, Color, QOS);
+	logInfo(0, "Subscribing to topic %s for client %s using Qos %d", TvPowered, CLIENTID, QOS);
+	MQTTClient_subscribe(client, TvPowered, QOS);
 
 	/**********************************Process behavior**********************************/
 	bool loopEnable = true;
 	int isOn = -1;
 	int reconnectCounter = 0;
-	cec_power_status iPower_old = cec_power_status::CEC_POWER_STATUS_UNKNOWN;
 	while (loopEnable) {
 		//----------------Check Time----------------
+#if USETIME == 1
 		auto currentTime = std::chrono::system_clock::now();
 		std::time_t time = std::chrono::system_clock::to_time_t(currentTime);
 		struct tm *tmp = gmtime(&time);
@@ -318,38 +215,23 @@ int main() {
 		if ((tmp->tm_hour >= 18) || (tmp->tm_hour < 5)) {
 			timeEnableHyperion = true;
 		}
-
-		//----------------Get power status but only if it's necessary----------------
-		bool cecEnableHyperion = false;
-//		if (timeEnableHyperion || mqttEnableHyperion) {
-		if (mqttEnableHyperion) {
-			cec_power_status iPower = g_parser->GetDevicePowerStatus((cec_logical_address) 0);
-			if (iPower_old != iPower) {
-				logInfo(1, "power status: %s", g_parser->ToString(iPower));
-				iPower_old = iPower;
-			}
-
-			if (iPower == cec_power_status::CEC_POWER_STATUS_ON || iPower == cec_power_status::CEC_POWER_STATUS_IN_TRANSITION_STANDBY_TO_ON) {
-				cecEnableHyperion = true;
-			} else if (iPower == cec_power_status::CEC_POWER_STATUS_STANDBY || iPower == cec_power_status::CEC_POWER_STATUS_IN_TRANSITION_ON_TO_STANDBY
-					|| iPower == cec_power_status::CEC_POWER_STATUS_UNKNOWN) {
-				cecEnableHyperion = false;
-			}
-		}
-
-		//----------------Decide to power of or on hyperion----------------
-//		if (cecEnableHyperion && (timeEnableHyperion || mqttEnableHyperion) && (isOn != 1)) {
-		if (cecEnableHyperion && mqttEnableHyperion && (isOn != 1)) {
+#endif
+//----------------Decide to power of or on hyperion----------------
+#if USETIME == 1
+		if (mqttTvPowered && (timeEnableHyperion || mqttEnableHyperion) && (isOn != 1)) {
+#else
+		if (mqttTvPowered && mqttEnableHyperion && (isOn != 1)) {
+#endif
 			system("hyperion-remote --clearall");
 			system("hyperion-remote --luminanceMin 0.15");
 			isOn = 1;
-		} else if (mqttEnableHyperion && !cecEnableHyperion && (isOn != 2 || colorUpdateAvailable)) {
+		} else if (mqttEnableHyperion && !mqttTvPowered && (isOn != 2 || colorUpdateAvailable)) {
 			char command[100];
 			sprintf(command, "hyperion-remote --priority 0 --color %s", sendColor);
 			system(command);
 			isOn = 2;
 			colorUpdateAvailable = false;
-		} else if (!cecEnableHyperion && !mqttEnableHyperion && (isOn != 0)) {
+		} else if (!mqttTvPowered && !mqttEnableHyperion && (isOn != 0)) {
 			system("hyperion-remote --priority 0 --color black");
 			system("hyperion-remote --luminanceMin 0.0");
 			isOn = 0;
@@ -381,9 +263,6 @@ int main() {
 		tm.tv_sec += 5;
 		sem_timedwait(&mutex, &tm);
 	}
-
-	g_parser->Close();
-	UnloadLibCec(g_parser);
 
 	MQTTClient_unsubscribe(client, Power);
 	MQTTClient_disconnect(client, 10000);
