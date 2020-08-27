@@ -145,6 +145,8 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 			mqttTvPowered = false;
 		}
 		logInfo(1, "TV Power is: %s", (char*) message->payload);
+	} else {
+		logInfo(1, "Unknown Message: %s", (char*) message->payload);
 	}
 
 	MQTTClient_freeMessage(&message);
