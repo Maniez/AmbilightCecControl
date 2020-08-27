@@ -233,7 +233,7 @@ int main() {
 			system(command);
 			isOn = 2;
 			colorUpdateAvailable = false;
-		} else if (!mqttTvPowered && !mqttEnableHyperion && (isOn != 0)) {
+		} else if (!mqttEnableHyperion && (isOn != 0)) {
 			system("hyperion-remote --priority 0 --color black");
 			system("hyperion-remote --luminanceMin 0.0");
 			isOn = 0;
@@ -251,6 +251,8 @@ int main() {
 					MQTTClient_subscribe(client, Power, QOS);
 					logInfo(0, "Subscribing to topic %s for client %s using Qos %d", Color, CLIENTID, QOS);
 					MQTTClient_subscribe(client, Color, QOS);
+					logInfo(0, "Subscribing to topic %s for client %s using Qos %d", TvPowered, CLIENTID, QOS);
+					MQTTClient_subscribe(client, TvPowered, QOS);
 					enableReconnect = false;
 					reconnectCounter = 0;
 				}
