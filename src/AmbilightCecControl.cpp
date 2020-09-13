@@ -119,9 +119,9 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 	logInfo(0, "topic: %s", topicName);
 	logInfo(1, "message: %s", (char*) message->payload);
 	if (strcmp(Power, (char*) topicName) == 0) {
-		if (strcmp("true", (char*) message->payload) == 0) {
+		if (strstr("true", temp) == 0) {
 			mqttEnableHyperion = true;
-		} else if (strcmp("false", (char*) message->payload) == 0) {
+		} else if (strstr("false", temp) == 0) {
 			mqttEnableHyperion = false;
 		}
 		logInfo(1, "Power MQTT set to: %s", (char*) message->payload);
@@ -139,9 +139,9 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 		sendColor[6] = '\0';
 		logInfo(0, "Color: %s", sendColor);
 	} else if (strcmp(TvPowered, (char*) topicName) == 0) {
-		if (strcmp("true", (char*) message->payload) == 0) {
+		if (strstr("true", temp) == 0) {
 			mqttTvPowered = true;
-		} else if (strcmp("false", (char*) message->payload) == 0) {
+		} else if (strstr("false", temp) == 0) {
 			mqttTvPowered = false;
 		}
 		logInfo(1, "TV Power is: %s", (char*) message->payload);
