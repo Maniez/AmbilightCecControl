@@ -139,9 +139,9 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 		sendColor[6] = '\0';
 		logInfo(0, "Color: %s", sendColor);
 	} else if (strcmp(TvPowered, topicName) == 0) {
-		if (strstr("true", temp) == 0) {
+		if (strcmp("true", temp) == 0) {
 			mqttTvPowered = true;
-		} else if (strstr("false", temp) == 0) {
+		} else if (strcmp("false", temp) == 0) {
 			mqttTvPowered = false;
 		}
 		logInfo(1, "TV Power is: %s", temp);
